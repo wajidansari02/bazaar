@@ -1,0 +1,1350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BazaarNow — Buy & Sell Anything</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
+
+<!-- Firebase SDK -->
+<script type="module">
+  import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+  import { getAuth, RecaptchaVerifier, signInWithPhoneNumber, createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+
+  // ===== FIREBASE CONFIG =====
+  // TODO: Replace with your own Firebase project config from https://console.firebase.google.com
+  const firebaseConfig = {
+    apiKey: "YOUR_API_KEY",
+    authDomain: "YOUR_PROJECT.firebaseapp.com",
+    projectId: "YOUR_PROJECT_ID",
+    storageBucket: "YOUR_PROJECT.appspot.com",
+    messagingSenderId: "YOUR_SENDER_ID",
+    appId: "YOUR_APP_ID"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+
+  // Expose to global scope
+  window._firebaseAuth = auth;
+  window._firebaseModules = { RecaptchaVerifier, signInWithPhoneNumber, createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile, onAuthStateChanged, signOut };
+
+  // Auth state listener
+  onAuthStateChanged(auth, (user) => {
+    window._currentFirebaseUser = user;
+    if (typeof window.onAuthChanged === 'function') window.onAuthChanged(user);
+  });
+</script>
+
+<style>
+  :root {
+    --bg: #0f0e0c;
+    --surface: #1a1917;
+    --surface2: #252420;
+    --border: #2e2c28;
+    --accent: #f5a623;
+    --accent2: #e8471d;
+    --text: #f0ede8;
+    --muted: #8a8680;
+    --green: #2ecf7a;
+    --card-bg: #1e1d1b;
+    --blue: #3b82f6;
+    --purple: #8b5cf6;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; overflow-x: hidden; }
+
+  /* NAV */
+  nav {
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(15,14,12,0.92); backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--border);
+    padding: 0 2rem; display: flex; align-items: center; gap: 1.5rem; height: 64px;
+  }
+  .logo { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 1.5rem; color: var(--accent); letter-spacing: -0.5px; white-space: nowrap; }
+  .logo span { color: var(--accent2); }
+  .search-bar { flex: 1; max-width: 500px; display: flex; align-items: center; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; transition: border-color .2s; }
+  .search-bar:focus-within { border-color: var(--accent); }
+  .search-bar input { flex: 1; background: none; border: none; outline: none; color: var(--text); font-family: 'DM Sans', sans-serif; font-size: .95rem; padding: .6rem 1rem; }
+  .search-bar input::placeholder { color: var(--muted); }
+  .search-bar button { background: var(--accent); border: none; cursor: pointer; padding: .6rem 1rem; color: #000; font-weight: 600; font-size: .9rem; transition: background .2s; }
+  .search-bar button:hover { background: #f7b84a; }
+  .nav-right { display: flex; align-items: center; gap: .75rem; margin-left: auto; }
+  .btn { cursor: pointer; border: none; border-radius: 8px; font-family: 'DM Sans', sans-serif; font-size: .9rem; font-weight: 500; padding: .5rem 1.1rem; transition: all .2s; }
+  .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--text); }
+  .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-primary { background: var(--accent); color: #000; font-weight: 700; }
+  .btn-primary:hover { background: #f7b84a; transform: translateY(-1px); }
+  .btn-danger { background: var(--accent2); color: #fff; font-weight: 700; }
+  .btn-danger:hover { filter: brightness(1.1); }
+
+  /* USER AVATAR */
+  .user-avatar-btn {
+    width: 36px; height: 36px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border: none; cursor: pointer; display: flex; align-items: center; justify-content: center;
+    font-family: 'Syne', sans-serif; font-weight: 800; font-size: .9rem; color: #000;
+    position: relative;
+  }
+  .user-dropdown {
+    position: absolute; top: calc(100% + .5rem); right: 0;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    min-width: 200px; overflow: hidden; z-index: 200;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    display: none;
+  }
+  .user-dropdown.open { display: block; }
+  .user-dropdown-item {
+    padding: .75rem 1rem; cursor: pointer; transition: background .15s;
+    font-size: .9rem; display: flex; align-items: center; gap: .6rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .user-dropdown-item:last-child { border-bottom: none; }
+  .user-dropdown-item:hover { background: var(--surface2); }
+  .user-dropdown-info { padding: .85rem 1rem; border-bottom: 1px solid var(--border); }
+  .user-dropdown-name { font-weight: 600; font-size: .95rem; }
+  .user-dropdown-phone { font-size: .78rem; color: var(--muted); }
+
+  /* HERO */
+  .hero { padding: 3.5rem 2rem 2.5rem; text-align: center; position: relative; overflow: hidden; }
+  .hero::before { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse 80% 60% at 50% -10%, rgba(245,166,35,0.12), transparent); pointer-events: none; }
+  .hero h1 { font-family: 'Syne', sans-serif; font-size: clamp(2.2rem, 5vw, 3.8rem); font-weight: 800; line-height: 1.1; letter-spacing: -1px; margin-bottom: .75rem; }
+  .hero h1 em { font-style: normal; color: var(--accent); }
+  .hero p { color: var(--muted); font-size: 1.05rem; margin-bottom: 2rem; }
+  .hero-cats { display: flex; flex-wrap: wrap; justify-content: center; gap: .5rem; max-width: 700px; margin: 0 auto; }
+  .cat-pill { background: var(--surface2); border: 1px solid var(--border); border-radius: 50px; padding: .4rem .9rem; font-size: .85rem; cursor: pointer; transition: all .2s; color: var(--muted); }
+  .cat-pill:hover, .cat-pill.active { background: var(--accent); color: #000; border-color: var(--accent); font-weight: 600; }
+
+  /* FAB */
+  .sell-fab { position: fixed; bottom: 2rem; right: 2rem; z-index: 200; background: var(--accent2); color: #fff; border: none; border-radius: 50px; padding: .85rem 1.6rem; font-family: 'Syne', sans-serif; font-weight: 700; font-size: 1rem; cursor: pointer; box-shadow: 0 8px 32px rgba(232,71,29,0.4); display: flex; align-items: center; gap: .5rem; transition: all .25s; }
+  .sell-fab:hover { transform: translateY(-3px); box-shadow: 0 12px 40px rgba(232,71,29,0.5); }
+  .sell-fab svg { width: 20px; height: 20px; }
+
+  /* GRID */
+  main { max-width: 1280px; margin: 0 auto; padding: 0 2rem 4rem; }
+  .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem; }
+  .section-title { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 1.3rem; }
+  .see-all { color: var(--accent); font-size: .9rem; cursor: pointer; background: none; border: none; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem; }
+
+  .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; cursor: pointer; transition: all .25s; position: relative; }
+  .card:hover { border-color: var(--accent); transform: translateY(-4px); box-shadow: 0 12px 36px rgba(0,0,0,0.4); }
+  .card-img-wrapper { position: relative; overflow: hidden; }
+  .card-img-wrapper img { width: 100%; aspect-ratio: 4/3; object-fit: cover; display: block; transition: transform .4s; }
+  .card:hover .card-img-wrapper img { transform: scale(1.05); }
+  .card-badge { position: absolute; top: .6rem; left: .6rem; background: var(--accent2); color: #fff; font-size: .7rem; font-weight: 700; padding: .2rem .55rem; border-radius: 4px; text-transform: uppercase; letter-spacing: .5px; }
+  .card-fav { position: absolute; top: .5rem; right: .5rem; background: rgba(0,0,0,0.55); border: none; border-radius: 50%; width: 32px; height: 32px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all .2s; color: #fff; font-size: 1rem; }
+  .card-fav:hover { background: rgba(245,166,35,0.8); }
+  .card-fav.active { background: var(--accent2); }
+  .card-body { padding: .75rem; }
+  .card-price { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 1.2rem; color: var(--accent); margin-bottom: .2rem; }
+  .card-title { font-size: .9rem; font-weight: 500; margin-bottom: .3rem; line-height: 1.3; }
+  .card-meta { font-size: .78rem; color: var(--muted); display: flex; gap: .5rem; align-items: center; }
+  .card-meta .dot { width: 3px; height: 3px; border-radius: 50%; background: var(--border); }
+
+  /* MODAL */
+  .overlay { position: fixed; inset: 0; z-index: 300; background: rgba(0,0,0,0.75); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; padding: 1rem; opacity: 0; pointer-events: none; transition: opacity .25s; }
+  .overlay.open { opacity: 1; pointer-events: all; }
+  .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; width: 100%; max-width: 560px; max-height: 90vh; overflow-y: auto; padding: 2rem; transform: translateY(20px); transition: transform .3s; }
+  .overlay.open .modal { transform: translateY(0); }
+  .modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; }
+  .modal-title { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 1.4rem; }
+  .close-btn { background: var(--surface2); border: 1px solid var(--border); color: var(--text); border-radius: 8px; width: 36px; height: 36px; cursor: pointer; font-size: 1.1rem; display: flex; align-items: center; justify-content: center; transition: all .2s; }
+  .close-btn:hover { border-color: var(--accent2); color: var(--accent2); }
+
+  /* FORM */
+  .form-group { margin-bottom: 1.1rem; }
+  .form-label { display: block; font-size: .85rem; font-weight: 600; margin-bottom: .4rem; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+  .form-input, .form-select, .form-textarea { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-family: 'DM Sans', sans-serif; font-size: .95rem; padding: .65rem .9rem; outline: none; transition: border-color .2s; }
+  .form-input:focus, .form-select:focus, .form-textarea:focus { border-color: var(--accent); }
+  .form-select { appearance: none; cursor: pointer; }
+  .form-select option { background: var(--surface); }
+  .form-textarea { resize: vertical; min-height: 90px; }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
+
+  /* PHONE INPUT */
+  .phone-input-row { display: flex; gap: .5rem; }
+  .phone-country-code { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; color: var(--text); padding: .65rem .75rem; font-size: .95rem; width: 80px; text-align: center; flex-shrink: 0; }
+  .otp-inputs { display: flex; gap: .5rem; justify-content: center; margin: 1rem 0; }
+  .otp-input { width: 48px; height: 56px; background: var(--surface2); border: 2px solid var(--border); border-radius: 10px; color: var(--text); font-size: 1.4rem; font-family: 'Syne', sans-serif; font-weight: 700; text-align: center; outline: none; transition: border-color .2s; }
+  .otp-input:focus { border-color: var(--accent); }
+
+  /* AUTH TABS */
+  .auth-tabs { display: flex; gap: 0; margin-bottom: 1.5rem; background: var(--surface2); border-radius: 10px; padding: 4px; }
+  .auth-tab { flex: 1; padding: .55rem; text-align: center; cursor: pointer; border-radius: 8px; font-size: .9rem; font-weight: 500; transition: all .2s; color: var(--muted); border: none; background: none; }
+  .auth-tab.active { background: var(--surface); color: var(--text); font-weight: 700; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+
+  /* UPLOAD */
+  .upload-zone { border: 2px dashed var(--border); border-radius: 12px; padding: 2rem; text-align: center; cursor: pointer; transition: all .2s; position: relative; }
+  .upload-zone:hover, .upload-zone.drag { border-color: var(--accent); background: rgba(245,166,35,0.05); }
+  .upload-zone input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+  .upload-icon { font-size: 2.5rem; margin-bottom: .5rem; }
+  .upload-text { font-size: .9rem; color: var(--muted); }
+  .upload-text strong { color: var(--accent); }
+  .preview-grid { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .75rem; }
+  .preview-item { width: 80px; height: 80px; border-radius: 8px; border: 1px solid var(--border); overflow: hidden; position: relative; }
+  .preview-item img { width: 100%; height: 100%; object-fit: cover; }
+  .preview-item button { position: absolute; top: 2px; right: 2px; background: rgba(0,0,0,0.7); border: none; border-radius: 50%; width: 20px; height: 20px; color: #fff; cursor: pointer; font-size: .7rem; display: flex; align-items: center; justify-content: center; }
+  .submit-btn { width: 100%; padding: .9rem; background: var(--accent); color: #000; border: none; border-radius: 10px; font-family: 'Syne', sans-serif; font-weight: 700; font-size: 1rem; cursor: pointer; transition: all .25s; margin-top: .5rem; }
+  .submit-btn:hover { background: #f7b84a; transform: translateY(-1px); }
+  .submit-btn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+
+  /* DETAIL MODAL */
+  .detail-imgs { display: flex; flex-direction: column; gap: .5rem; margin-bottom: 1.25rem; }
+  .detail-main-img { width: 100%; border-radius: 10px; aspect-ratio: 16/9; object-fit: cover; background: var(--surface2); }
+  .detail-thumbs { display: flex; gap: .5rem; }
+  .detail-thumb { width: 60px; height: 60px; border-radius: 6px; object-fit: cover; border: 2px solid transparent; cursor: pointer; transition: border-color .2s; }
+  .detail-thumb.active { border-color: var(--accent); }
+  .detail-price { font-family: 'Syne', sans-serif; font-size: 2rem; font-weight: 800; color: var(--accent); }
+  .detail-title { font-size: 1.2rem; font-weight: 600; margin: .4rem 0; }
+  .detail-desc { color: var(--muted); font-size: .9rem; line-height: 1.6; margin-bottom: 1rem; }
+  .detail-meta { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: 1rem; }
+  .detail-tag { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: .3rem .7rem; font-size: .8rem; color: var(--muted); }
+  .detail-seller { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: .85rem; display: flex; align-items: center; gap: .75rem; margin-bottom: 1rem; }
+  .seller-avatar { width: 44px; height: 44px; border-radius: 50%; background: linear-gradient(135deg, var(--accent), var(--accent2)); display: flex; align-items: center; justify-content: center; font-family: 'Syne', sans-serif; font-weight: 800; font-size: 1rem; color: #000; flex-shrink: 0; }
+  .seller-name { font-weight: 600; font-size: .95rem; }
+  .seller-sub { color: var(--muted); font-size: .8rem; }
+  .contact-btn { width: 100%; padding: .85rem; background: var(--green); color: #000; border: none; border-radius: 10px; font-family: 'Syne', sans-serif; font-weight: 700; font-size: 1rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: .5rem; transition: all .25s; }
+  .contact-btn:hover { filter: brightness(1.1); transform: translateY(-1px); }
+  .login-gate { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 1rem; text-align: center; color: var(--muted); font-size: .9rem; margin-bottom: .5rem; }
+  .login-gate strong { color: var(--accent); cursor: pointer; }
+
+  /* TOAST */
+  .toast { position: fixed; bottom: 5rem; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--green); color: #000; border-radius: 50px; padding: .7rem 1.5rem; font-weight: 700; font-size: .9rem; z-index: 500; opacity: 0; transition: all .3s; pointer-events: none; }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .toast.error { background: var(--accent2); color: #fff; }
+
+  /* EMPTY */
+  .empty { text-align: center; padding: 4rem 1rem; color: var(--muted); }
+  .empty svg { width: 64px; opacity: .3; margin-bottom: 1rem; }
+
+  /* FILTERS */
+  .filters-row { display: flex; gap: .5rem; flex-wrap: wrap; margin-bottom: 1.5rem; align-items: center; }
+  .filter-chip { background: var(--surface2); border: 1px solid var(--border); border-radius: 50px; padding: .35rem .8rem; font-size: .82rem; cursor: pointer; transition: all .2s; color: var(--muted); white-space: nowrap; }
+  .filter-chip:hover, .filter-chip.active { background: var(--accent); color: #000; border-color: var(--accent); font-weight: 600; }
+  .sort-select { margin-left: auto; background: var(--surface2); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: .35rem .7rem; font-family: 'DM Sans', sans-serif; font-size: .85rem; cursor: pointer; outline: none; }
+
+  /* RECAPTCHA container */
+  #recaptcha-container { margin: .75rem 0; }
+
+  /* ADMIN PANEL */
+  .admin-page { max-width: 1100px; margin: 0 auto; padding: 2rem; }
+  .admin-header { display: flex; align-items: center; gap: 1rem; margin-bottom: 2rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border); }
+  .admin-header h1 { font-family: 'Syne', sans-serif; font-size: 1.8rem; font-weight: 800; }
+  .admin-badge { background: var(--accent2); color: #fff; font-size: .75rem; font-weight: 700; padding: .2rem .6rem; border-radius: 4px; text-transform: uppercase; }
+  .admin-tabs { display: flex; gap: .5rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+  .admin-tab { background: var(--surface2); border: 1px solid var(--border); color: var(--muted); border-radius: 8px; padding: .5rem 1rem; cursor: pointer; font-size: .9rem; font-weight: 500; transition: all .2s; }
+  .admin-tab.active { background: var(--accent); color: #000; border-color: var(--accent); font-weight: 700; }
+  .admin-section { display: none; }
+  .admin-section.active { display: block; }
+  .admin-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem; margin-bottom: .75rem; display: flex; align-items: center; gap: 1rem; }
+  .admin-card-info { flex: 1; }
+  .admin-card-title { font-weight: 600; font-size: .95rem; margin-bottom: .2rem; }
+  .admin-card-sub { font-size: .8rem; color: var(--muted); }
+  .admin-card-actions { display: flex; gap: .5rem; flex-shrink: 0; }
+  .admin-stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+  .admin-stat { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem; }
+  .admin-stat-label { font-size: .8rem; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: .4rem; }
+  .admin-stat-value { font-family: 'Syne', sans-serif; font-size: 2rem; font-weight: 800; color: var(--accent); }
+  .admin-fee-row { display: flex; align-items: center; gap: 1rem; margin-bottom: .75rem; flex-wrap: wrap; }
+  .admin-fee-label { font-weight: 500; min-width: 160px; }
+  .admin-fee-input { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; color: var(--text); padding: .5rem .75rem; font-family: 'DM Sans', sans-serif; font-size: .95rem; width: 100px; outline: none; transition: border-color .2s; }
+  .admin-fee-input:focus { border-color: var(--accent); }
+  .small-btn { padding: .35rem .75rem; font-size: .82rem; font-weight: 600; border: none; border-radius: 6px; cursor: pointer; transition: all .2s; }
+  .small-btn-danger { background: rgba(232,71,29,0.15); color: var(--accent2); border: 1px solid rgba(232,71,29,0.3); }
+  .small-btn-danger:hover { background: var(--accent2); color: #fff; }
+  .small-btn-primary { background: var(--accent); color: #000; }
+  .small-btn-primary:hover { filter: brightness(1.1); }
+
+  /* SPINNER */
+  .spinner { display: inline-block; width: 20px; height: 20px; border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; vertical-align: middle; margin-right: .4rem; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* DIVIDER */
+  .divider { display: flex; align-items: center; gap: 1rem; margin: 1rem 0; color: var(--muted); font-size: .82rem; }
+  .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+  @media (max-width: 600px) {
+    nav { padding: 0 1rem; }
+    .logo { font-size: 1.2rem; }
+    main { padding: 0 1rem 5rem; }
+    .hero { padding: 2rem 1rem 1.5rem; }
+    .modal { padding: 1.25rem; }
+    .form-row { grid-template-columns: 1fr; }
+    .admin-page { padding: 1rem; }
+    .admin-stat-grid { grid-template-columns: 1fr 1fr; }
+    .admin-card { flex-wrap: wrap; }
+  }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav id="mainNav">
+  <div class="logo">Bazaar<span>Now</span></div>
+  <div class="search-bar">
+    <input type="text" id="searchInput" placeholder="Search mobiles, cycles, clothes…" oninput="filterListings()">
+    <button onclick="filterListings()">Search</button>
+  </div>
+  <div class="nav-right" id="navRight">
+    <!-- Rendered by JS based on auth state -->
+  </div>
+</nav>
+
+<!-- HERO (main marketplace) -->
+<div id="mainView">
+  <section class="hero">
+    <h1>Buy & Sell <em>Anything</em><br>Near You</h1>
+    <p>List your old mobile, cycle, clothes & more — for free</p>
+    <div class="hero-cats" id="heroCats">
+      <div class="cat-pill active" onclick="filterCat('All', this)">All</div>
+      <div class="cat-pill" onclick="filterCat('Mobiles', this)">📱 Mobiles</div>
+      <div class="cat-pill" onclick="filterCat('Cycles', this)">🚲 Cycles</div>
+      <div class="cat-pill" onclick="filterCat('Clothes', this)">👕 Clothes</div>
+      <div class="cat-pill" onclick="filterCat('Electronics', this)">💻 Electronics</div>
+      <div class="cat-pill" onclick="filterCat('Furniture', this)">🛋️ Furniture</div>
+      <div class="cat-pill" onclick="filterCat('Books', this)">📚 Books</div>
+      <div class="cat-pill" onclick="filterCat('Vehicles', this)">🚗 Vehicles</div>
+      <div class="cat-pill" onclick="filterCat('Other', this)">📦 Other</div>
+    </div>
+  </section>
+
+  <main>
+    <div class="filters-row" id="filtersRow">
+      <div class="filter-chip active" onclick="filterCondition('All', this)">All Conditions</div>
+      <div class="filter-chip" onclick="filterCondition('New', this)">🌟 New</div>
+      <div class="filter-chip" onclick="filterCondition('Like New', this)">✨ Like New</div>
+      <div class="filter-chip" onclick="filterCondition('Good', this)">👍 Good</div>
+      <div class="filter-chip" onclick="filterCondition('Fair', this)">🔧 Fair</div>
+      <select class="sort-select" onchange="sortListings(this.value)">
+        <option value="newest">Newest First</option>
+        <option value="price_asc">Price: Low to High</option>
+        <option value="price_desc">Price: High to Low</option>
+      </select>
+    </div>
+    <div class="section-header">
+      <div class="section-title" id="gridTitle">All Listings</div>
+      <button class="see-all" id="listingCount"></button>
+    </div>
+    <div class="grid" id="listingsGrid"></div>
+  </main>
+</div>
+
+<!-- ADMIN VIEW -->
+<div id="adminView" style="display:none;">
+  <div class="admin-page">
+    <div class="admin-header">
+      <div>
+        <h1>⚙️ Admin Panel</h1>
+        <div style="color:var(--muted);font-size:.9rem;margin-top:.2rem;">BazaarNow Management Console</div>
+      </div>
+      <span class="admin-badge">ADMIN</span>
+      <button class="btn btn-ghost" style="margin-left:auto;" onclick="showMainView()">← Back to Marketplace</button>
+    </div>
+
+    <div class="admin-stat-grid" id="adminStats"></div>
+
+    <div class="admin-tabs">
+      <button class="admin-tab active" onclick="switchAdminTab('listings', this)">📦 Listings</button>
+      <button class="admin-tab" onclick="switchAdminTab('users', this)">👥 Users</button>
+      <button class="admin-tab" onclick="switchAdminTab('charges', this)">💰 Charges</button>
+      <button class="admin-tab" onclick="switchAdminTab('contacts', this)">📞 Seller Contacts</button>
+    </div>
+
+    <div class="admin-section active" id="adminListings"></div>
+    <div class="admin-section" id="adminUsers"></div>
+    <div class="admin-section" id="adminCharges"></div>
+    <div class="admin-section" id="adminContacts"></div>
+  </div>
+</div>
+
+<!-- FAB -->
+<button class="sell-fab" id="sellFab" onclick="handleSellClick()">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+  Sell Now
+</button>
+
+<!-- SELL MODAL -->
+<div class="overlay" id="sellModal" onclick="handleOverlayClick(event,'sellModal')">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">📸 Post Your Ad</div>
+      <button class="close-btn" onclick="hideModal('sellModal')">✕</button>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Photos (up to 6) <span style="font-weight:400;color:var(--green);font-size:.75rem;text-transform:none;">✅ Saved to your device</span></label>
+      <div class="upload-zone" id="uploadZone" ondragover="handleDrag(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)">
+        <input type="file" multiple accept="image/*" id="fileInput" onchange="handleFiles(this.files)">
+        <div class="upload-icon">🖼️</div>
+        <div class="upload-text"><strong>Click to upload</strong> or drag & drop<br>JPG, PNG, WEBP — auto-compressed &amp; saved to device</div>
+      </div>
+      <div class="preview-grid" id="previewGrid"></div>
+      <div id="storageInfo" style="font-size:.75rem;color:var(--muted);margin-top:.4rem;"></div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Title</label>
+      <input class="form-input" id="adTitle" type="text" placeholder="e.g. iPhone 13 128GB Black — Like New">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Category</label>
+        <select class="form-select" id="adCategory">
+          <option value="">Select…</option>
+          <option>Mobiles</option><option>Cycles</option><option>Clothes</option>
+          <option>Electronics</option><option>Furniture</option><option>Books</option>
+          <option>Vehicles</option><option>Other</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Condition</label>
+        <select class="form-select" id="adCondition">
+          <option value="">Select…</option>
+          <option>New</option><option>Like New</option><option>Good</option><option>Fair</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Price (₹)</label>
+        <input class="form-input" id="adPrice" type="number" placeholder="0">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Location</label>
+        <input class="form-input" id="adLocation" type="text" placeholder="e.g. Gurugram">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Description</label>
+      <textarea class="form-textarea" id="adDesc" placeholder="Describe what you're selling…"></textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Your Name</label>
+      <input class="form-input" id="adSeller" type="text" placeholder="Full name">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Phone Number</label>
+      <input class="form-input" id="adPhone" type="tel" placeholder="+91 XXXXX XXXXX">
+    </div>
+    <button class="submit-btn" onclick="submitAd()">🚀 Post Ad for Free</button>
+  </div>
+</div>
+
+<!-- AUTH MODAL (Login / Register with Firebase Phone OTP) -->
+<div class="overlay" id="authModal" onclick="handleOverlayClick(event,'authModal')">
+  <div class="modal" style="max-width:420px">
+
+    <!-- Step 1: Choose method -->
+    <div id="authStep1">
+      <div class="modal-header">
+        <div class="modal-title" id="authModalTitle">Welcome 👋</div>
+        <button class="close-btn" onclick="hideModal('authModal')">✕</button>
+      </div>
+      <div class="auth-tabs">
+        <button class="auth-tab active" onclick="switchAuthTab('login', this)">Login</button>
+        <button class="auth-tab" onclick="switchAuthTab('register', this)">Create Account</button>
+      </div>
+
+      <!-- Phone OTP login -->
+      <div id="phoneAuthSection">
+        <div class="form-group">
+          <label class="form-label">📱 Phone Number (OTP via SMS)</label>
+          <div class="phone-input-row">
+            <div class="phone-country-code">+91</div>
+            <input class="form-input" id="phoneInput" type="tel" placeholder="98765 43210" maxlength="10">
+          </div>
+        </div>
+        <div id="recaptcha-container"></div>
+        <button class="submit-btn" id="sendOtpBtn" onclick="sendOTP()">
+          📨 Send OTP
+        </button>
+        <div class="divider">or</div>
+        <button class="btn btn-ghost" style="width:100%;justify-content:center;display:flex;" onclick="switchToEmailAuth()">
+          📧 Use Email & Password instead
+        </button>
+      </div>
+
+      <!-- Email auth (fallback) -->
+      <div id="emailAuthSection" style="display:none;">
+        <div class="form-group" id="nameFieldGroup" style="display:none;">
+          <label class="form-label">Full Name</label>
+          <input class="form-input" id="emailName" type="text" placeholder="Your name">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Email</label>
+          <input class="form-input" id="emailInput" type="email" placeholder="you@example.com">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Password</label>
+          <input class="form-input" id="passwordInput" type="password" placeholder="••••••••">
+        </div>
+        <button class="submit-btn" id="emailAuthBtn" onclick="handleEmailAuth()">Login</button>
+        <div class="divider">or</div>
+        <button class="btn btn-ghost" style="width:100%;justify-content:center;display:flex;" onclick="switchToPhoneAuth()">
+          📱 Use Phone OTP instead
+        </button>
+      </div>
+    </div>
+
+    <!-- Step 2: Enter OTP -->
+    <div id="authStep2" style="display:none;">
+      <div class="modal-header">
+        <div class="modal-title">Enter OTP 🔐</div>
+        <button class="close-btn" onclick="hideModal('authModal')">✕</button>
+      </div>
+      <p style="color:var(--muted);font-size:.9rem;margin-bottom:1rem;">
+        We sent a 6-digit code to <strong id="otpSentTo" style="color:var(--text)"></strong>
+      </p>
+      <div class="otp-inputs" id="otpInputs">
+        <input class="otp-input" maxlength="1" type="text" oninput="otpInputNav(this, 0)">
+        <input class="otp-input" maxlength="1" type="text" oninput="otpInputNav(this, 1)">
+        <input class="otp-input" maxlength="1" type="text" oninput="otpInputNav(this, 2)">
+        <input class="otp-input" maxlength="1" type="text" oninput="otpInputNav(this, 3)">
+        <input class="otp-input" maxlength="1" type="text" oninput="otpInputNav(this, 4)">
+        <input class="otp-input" maxlength="1" type="text" oninput="otpInputNav(this, 5)">
+      </div>
+      <!-- Name field for new users after OTP -->
+      <div id="otpNameField" style="display:none;" class="form-group">
+        <label class="form-label">Your Name (for new account)</label>
+        <input class="form-input" id="otpName" type="text" placeholder="Full name">
+      </div>
+      <button class="submit-btn" id="verifyOtpBtn" onclick="verifyOTP()">✅ Verify & Login</button>
+      <p style="text-align:center;margin-top:.75rem;font-size:.82rem;color:var(--muted)">
+        Didn't receive? <span style="color:var(--accent);cursor:pointer;" onclick="resendOTP()">Resend OTP</span>
+      </p>
+    </div>
+
+  </div>
+</div>
+
+<!-- DETAIL MODAL -->
+<div class="overlay" id="detailModal" onclick="handleOverlayClick(event,'detailModal')">
+  <div class="modal" id="detailContent"></div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ======= STORAGE KEYS =======
+const STORAGE_KEY = 'bazaarnow_listings';
+const STORAGE_IMGS_KEY = 'bazaarnow_imgs_';
+const STORAGE_USERS_KEY = 'bazaarnow_users';
+const STORAGE_CHARGES_KEY = 'bazaarnow_charges';
+const ADMIN_PHONE = '+919999999999'; // Change to your admin phone number
+const ADMIN_EMAIL = 'admin@bazaarnow.com'; // Change to your admin email
+
+// ======= CATEGORY ICONS =======
+const CAT_ICON = {Mobiles:'📱',Cycles:'🚲',Clothes:'👕',Electronics:'💻',Furniture:'🛋️',Books:'📚',Vehicles:'🚗',Other:'📦'};
+
+// ======= CHARGES CONFIG =======
+let charges = loadCharges();
+function loadCharges() {
+  try {
+    const raw = localStorage.getItem(STORAGE_CHARGES_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch(e){}
+  return { listingFeePercent: 5, featuredBoost: 99, premiumPlan: 299 };
+}
+function saveCharges() {
+  try { localStorage.setItem(STORAGE_CHARGES_KEY, JSON.stringify(charges)); } catch(e){}
+}
+
+// ======= USERS =======
+let users = loadUsers();
+function loadUsers() {
+  try {
+    const raw = localStorage.getItem(STORAGE_USERS_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch(e){}
+  return [];
+}
+function saveUsers() {
+  try { localStorage.setItem(STORAGE_USERS_KEY, JSON.stringify(users)); } catch(e){}
+}
+function upsertUser(uid, data) {
+  const idx = users.findIndex(u => u.uid === uid);
+  if (idx >= 0) { users[idx] = { ...users[idx], ...data }; }
+  else { users.push({ uid, createdAt: Date.now(), ...data }); }
+  saveUsers();
+}
+function deleteUserById(uid) {
+  users = users.filter(u => u.uid !== uid);
+  // Also delete their listings
+  listings = listings.filter(l => l.ownerUid !== uid);
+  saveListings(listings);
+  saveUsers();
+}
+
+// ======= AUTH STATE =======
+let currentUser = null; // { uid, name, phone/email, isAdmin }
+
+window.onAuthChanged = function(firebaseUser) {
+  if (firebaseUser) {
+    const phone = firebaseUser.phoneNumber || '';
+    const email = firebaseUser.email || '';
+    const isAdmin = (phone === ADMIN_PHONE || email === ADMIN_EMAIL);
+    currentUser = {
+      uid: firebaseUser.uid,
+      name: firebaseUser.displayName || (phone ? phone : email),
+      phone,
+      email,
+      isAdmin
+    };
+    upsertUser(firebaseUser.uid, { name: currentUser.name, phone, email, isAdmin });
+  } else {
+    currentUser = null;
+  }
+  renderNav();
+  renderListings();
+};
+
+// Fallback: if Firebase not configured, use local mock auth
+function isFirebaseReady() {
+  return !!window._firebaseAuth;
+}
+
+// ======= DEMO DATA =======
+function makePlaceholderSvg(label, color) {
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='400' height='300'><rect width='400' height='300' fill='${color}'/><text x='200' y='130' fill='%23ffffff99' text-anchor='middle' font-size='48'>${encodeURIComponent(label)}</text><text x='200' y='175' fill='%23ffffff55' text-anchor='middle' font-size='14' font-family='sans-serif'>No Photo</text></svg>`;
+  return 'data:image/svg+xml,' + svg;
+}
+const DEMO_PLACEHOLDERS = {
+  Mobiles: makePlaceholderSvg('📱','%23203050'),
+  Cycles: makePlaceholderSvg('🚲','%23182b18'),
+  Clothes: makePlaceholderSvg('👕','%232a1a2e'),
+  Electronics: makePlaceholderSvg('💻','%231a2030'),
+  Furniture: makePlaceholderSvg('🛋️','%23281e10'),
+  Books: makePlaceholderSvg('📚','%23201428'),
+  Vehicles: makePlaceholderSvg('🚗','%23101820'),
+  Other: makePlaceholderSvg('📦','%231e1e1e'),
+};
+
+const DEFAULT_LISTINGS = [
+  {id:1,title:'iPhone 12 Pro — 128GB Pacific Blue',category:'Mobiles',condition:'Like New',price:28000,location:'Gurugram',desc:'Bought 1.5 years ago. Battery health 89%. All original accessories included.',seller:'Rahul K.',phone:'+91 98765 43210',favs:false,time:'2h ago',postedAt:Date.now()-7200000,userUploaded:false,ownerUid:'demo1'},
+  {id:2,title:'Trek MTB Cycle 21-Speed',category:'Cycles',condition:'Good',price:6500,location:'Noida',desc:'Used for 2 years. Gear shifters work fine. New tyres fitted 3 months back.',seller:'Priya S.',phone:'+91 91234 56789',favs:false,time:'5h ago',postedAt:Date.now()-18000000,userUploaded:false,ownerUid:'demo2'},
+  {id:3,title:"Levi's Jacket — Size M (Men)",category:'Clothes',condition:'Like New',price:800,location:'Delhi',desc:'Worn only twice. Perfect condition. Original MRP ₹3499.',seller:'Amit D.',phone:'+91 87654 32109',favs:false,time:'1d ago',postedAt:Date.now()-86400000,userUploaded:false,ownerUid:'demo3'},
+  {id:4,title:'Dell Laptop i5 8th Gen 8GB RAM',category:'Electronics',condition:'Good',price:22000,location:'Faridabad',desc:'Working perfectly. SSD 256GB. Battery backup ~3hrs. Charger included.',seller:'Neha G.',phone:'+91 76543 21098',favs:false,time:'2d ago',postedAt:Date.now()-172800000,userUploaded:false,ownerUid:'demo4'},
+  {id:5,title:'Wooden Study Table — Walnut Finish',category:'Furniture',condition:'Good',price:3200,location:'Gurgaon',desc:'Solid wood, 4 ft wide. Minor surface scratches. Self-pickup only.',seller:'Vikram M.',phone:'+91 65432 10987',favs:false,time:'3d ago',postedAt:Date.now()-259200000,userUploaded:false,ownerUid:'demo5'},
+  {id:6,title:'UPSC Study Material 2023 Full Set',category:'Books',condition:'Good',price:1200,location:'Delhi',desc:'Complete 18-book set. Highlighted but readable. Very helpful for prelims.',seller:'Sunita R.',phone:'+91 54321 09876',favs:false,time:'4d ago',postedAt:Date.now()-345600000,userUploaded:false,ownerUid:'demo6'},
+  {id:7,title:'Honda Activa 5G — 2020 Model',category:'Vehicles',condition:'Good',price:58000,location:'Gurugram',desc:'25,000 km driven. Insurance valid till 2025. All documents clear.',seller:'Rahul K.',phone:'+91 98765 43210',favs:false,time:'5d ago',postedAt:Date.now()-432000000,userUploaded:false,ownerUid:'demo1'},
+  {id:8,title:'Samsung Galaxy Buds Pro',category:'Mobiles',condition:'Like New',price:4500,location:'Noida',desc:'Used for 3 months. ANC works great. Case and cable included.',seller:'Priya S.',phone:'+91 91234 56789',favs:false,time:'6d ago',postedAt:Date.now()-518400000,userUploaded:false,ownerUid:'demo2'},
+];
+
+// ======= PERSISTENCE =======
+function saveListings(arr) {
+  try {
+    const meta = arr.map(l => { const {imgs, ...rest} = l; return rest; });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(meta));
+  } catch(e) {}
+}
+function saveImages(id, imgs) {
+  try { localStorage.setItem(STORAGE_IMGS_KEY + id, JSON.stringify(imgs)); }
+  catch(e) { try { localStorage.setItem(STORAGE_IMGS_KEY + id, JSON.stringify([imgs[0]])); } catch(e2) {} }
+}
+function loadImages(id, category) {
+  try {
+    const raw = localStorage.getItem(STORAGE_IMGS_KEY + id);
+    if (raw) return JSON.parse(raw);
+  } catch(e){}
+  return [DEMO_PLACEHOLDERS[category] || DEMO_PLACEHOLDERS.Other];
+}
+function loadListings() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const meta = JSON.parse(raw);
+      return meta.map(l => ({ ...l, imgs: loadImages(l.id, l.category) }));
+    }
+  } catch(e){}
+  const seeded = DEFAULT_LISTINGS.map(l => ({ ...l, imgs: [DEMO_PLACEHOLDERS[l.category]||DEMO_PLACEHOLDERS.Other] }));
+  saveListings(seeded);
+  seeded.forEach(l => saveImages(l.id, l.imgs));
+  return seeded;
+}
+function deleteListingStorage(id) {
+  try { localStorage.removeItem(STORAGE_IMGS_KEY + id); } catch(e){}
+}
+
+// ======= STATE =======
+let listings = loadListings();
+let uploadedFiles = [];
+let activeCategory = 'All';
+let activeCondition = 'All';
+let currentSort = 'newest';
+
+// ======= TIME HELPER =======
+function timeAgo(ts) {
+  const diff = Date.now() - ts;
+  const m = Math.floor(diff/60000);
+  if (m < 1) return 'Just now';
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m/60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h/24)}d ago`;
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ======= NAV RENDER =======
+function renderNav() {
+  const nav = document.getElementById('navRight');
+  if (currentUser) {
+    const initials = (currentUser.name||'U')[0].toUpperCase();
+    nav.innerHTML = `
+      <div style="position:relative;" id="userMenuWrap">
+        <button class="user-avatar-btn" onclick="toggleUserMenu()" title="${escHtml(currentUser.name)}">${initials}</button>
+        <div class="user-dropdown" id="userDropdown">
+          <div class="user-dropdown-info">
+            <div class="user-dropdown-name">${escHtml(currentUser.name)}</div>
+            <div class="user-dropdown-phone">${escHtml(currentUser.phone || currentUser.email || '')}</div>
+          </div>
+          <div class="user-dropdown-item" onclick="showMainView()">🏠 Marketplace</div>
+          ${currentUser.isAdmin ? `<div class="user-dropdown-item" onclick="showAdminPanel()">⚙️ Admin Panel</div>` : ''}
+          <div class="user-dropdown-item" style="color:var(--accent2);" onclick="handleLogout()">🚪 Logout</div>
+        </div>
+      </div>
+      <button class="btn btn-primary" onclick="handleSellClick()">+ Sell</button>
+    `;
+  } else {
+    nav.innerHTML = `
+      <button class="btn btn-ghost" onclick="openAuthModal('login')">Login</button>
+      <button class="btn btn-primary" onclick="openAuthModal('register')">Register</button>
+    `;
+  }
+}
+
+function toggleUserMenu() {
+  document.getElementById('userDropdown').classList.toggle('open');
+}
+document.addEventListener('click', (e) => {
+  const wrap = document.getElementById('userMenuWrap');
+  if (wrap && !wrap.contains(e.target)) {
+    const dd = document.getElementById('userDropdown');
+    if (dd) dd.classList.remove('open');
+  }
+});
+
+// ======= VIEWS =======
+function showMainView() {
+  document.getElementById('mainView').style.display = '';
+  document.getElementById('adminView').style.display = 'none';
+  document.getElementById('sellFab').style.display = '';
+  const dd = document.getElementById('userDropdown');
+  if (dd) dd.classList.remove('open');
+}
+
+function showAdminPanel() {
+  if (!currentUser || !currentUser.isAdmin) { showToast('⛔ Admin access only', true); return; }
+  document.getElementById('mainView').style.display = 'none';
+  document.getElementById('adminView').style.display = '';
+  document.getElementById('sellFab').style.display = 'none';
+  const dd = document.getElementById('userDropdown');
+  if (dd) dd.classList.remove('open');
+  renderAdminPanel();
+}
+
+// ======= RENDER LISTINGS =======
+function renderListings() {
+  let filtered = listings.map(l => ({...l, time: l.postedAt ? timeAgo(l.postedAt) : l.time}));
+  const q = document.getElementById('searchInput').value.toLowerCase();
+  if (q) filtered = filtered.filter(l => l.title.toLowerCase().includes(q) || l.category.toLowerCase().includes(q) || l.location.toLowerCase().includes(q));
+  if (activeCategory !== 'All') filtered = filtered.filter(l => l.category === activeCategory);
+  if (activeCondition !== 'All') filtered = filtered.filter(l => l.condition === activeCondition);
+  if (currentSort === 'price_asc') filtered.sort((a,b) => a.price - b.price);
+  else if (currentSort === 'price_desc') filtered.sort((a,b) => b.price - a.price);
+  else filtered.sort((a,b) => (b.postedAt||0) - (a.postedAt||0));
+
+  const grid = document.getElementById('listingsGrid');
+  document.getElementById('listingCount').textContent = `${filtered.length} ads`;
+  document.getElementById('gridTitle').textContent = activeCategory === 'All' ? 'All Listings' : activeCategory;
+
+  if (!filtered.length) {
+    grid.innerHTML = `<div class="empty" style="grid-column:1/-1"><svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2"><circle cx="32" cy="32" r="28"/><path d="M20 44 L44 20M20 20 L44 44"/></svg><p>No listings found</p></div>`;
+    return;
+  }
+
+  const noImgSvg = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300'%3E%3Crect width='400' height='300' fill='%231e1d1b'/%3E%3Ctext x='200' y='160' fill='%238a8680' text-anchor='middle' font-size='14' font-family='sans-serif'%3ENo Image%3C/text%3E%3C/svg%3E";
+  const feeMultiplier = 1 + (charges.listingFeePercent / 100);
+
+  grid.innerHTML = filtered.map(l => {
+    const imgSrc = (l.imgs && l.imgs[0]) ? l.imgs[0] : noImgSvg;
+    const isOwn = currentUser && l.ownerUid === currentUser.uid;
+    return `
+    <div class="card" onclick="openDetail(${l.id})">
+      <div class="card-img-wrapper">
+        <img src="${imgSrc}" alt="${escHtml(l.title)}" loading="lazy" onerror="this.src='${noImgSvg}'">
+        <div class="card-badge">${l.condition}</div>
+        ${isOwn ? `<div style="position:absolute;bottom:.5rem;left:.5rem;background:var(--green);color:#000;font-size:.65rem;font-weight:700;padding:.15rem .45rem;border-radius:4px;">YOUR AD</div>` : ''}
+        <button class="card-fav ${l.favs?'active':''}" onclick="toggleFav(event,${l.id})">${l.favs?'❤️':'🤍'}</button>
+      </div>
+      <div class="card-body">
+        <div class="card-price">₹${Math.round(l.price * feeMultiplier).toLocaleString('en-IN')}</div>
+        <div class="card-title">${escHtml(l.title)}</div>
+        <div class="card-meta">
+          <span>📍 ${escHtml(l.location)}</span><span class="dot"></span>
+          <span>${l.time || timeAgo(l.postedAt)}</span>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ======= FILTERS =======
+function filterCat(cat, el) {
+  activeCategory = cat;
+  document.querySelectorAll('.cat-pill').forEach(p => p.classList.remove('active'));
+  el.classList.add('active');
+  renderListings();
+}
+function filterCondition(cond, el) {
+  activeCondition = cond;
+  document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  renderListings();
+}
+function filterListings() { renderListings(); }
+function sortListings(val) { currentSort = val; renderListings(); }
+
+// ======= MODAL =======
+function showModal(id) { document.getElementById(id).classList.add('open'); document.body.style.overflow='hidden'; }
+function hideModal(id) { document.getElementById(id).classList.remove('open'); document.body.style.overflow=''; }
+function handleOverlayClick(e, id) { if (e.target.classList.contains('overlay')) hideModal(id); }
+
+// ======= AUTH MODAL =======
+let authMode = 'login';
+let confirmationResult = null;
+let recaptchaVerifier = null;
+
+function openAuthModal(mode) {
+  authMode = mode;
+  switchAuthTab(mode, null);
+  document.getElementById('authStep1').style.display = '';
+  document.getElementById('authStep2').style.display = 'none';
+  document.getElementById('authModalTitle').textContent = mode === 'login' ? 'Welcome Back 👋' : 'Create Account 🎉';
+  showModal('authModal');
+  // Init recaptcha after modal is visible
+  setTimeout(() => initRecaptcha(), 300);
+}
+
+function switchAuthTab(mode, el) {
+  authMode = mode;
+  document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
+  if (el) el.classList.add('active');
+  else {
+    document.querySelectorAll('.auth-tab').forEach((t, i) => {
+      if ((i === 0 && mode === 'login') || (i === 1 && mode === 'register')) t.classList.add('active');
+    });
+  }
+  const nameField = document.getElementById('nameFieldGroup');
+  if (nameField) nameField.style.display = mode === 'register' ? '' : 'none';
+  const emailBtn = document.getElementById('emailAuthBtn');
+  if (emailBtn) emailBtn.textContent = mode === 'login' ? 'Login' : 'Create Account';
+  // Show OTP name for register
+  const otpNameDiv = document.getElementById('otpNameField');
+  if (otpNameDiv) otpNameDiv.style.display = mode === 'register' ? '' : 'none';
+}
+
+function switchToEmailAuth() {
+  document.getElementById('phoneAuthSection').style.display = 'none';
+  document.getElementById('emailAuthSection').style.display = '';
+  const nameField = document.getElementById('nameFieldGroup');
+  if (nameField) nameField.style.display = authMode === 'register' ? '' : 'none';
+  const emailBtn = document.getElementById('emailAuthBtn');
+  if (emailBtn) emailBtn.textContent = authMode === 'login' ? 'Login' : 'Create Account';
+}
+function switchToPhoneAuth() {
+  document.getElementById('phoneAuthSection').style.display = '';
+  document.getElementById('emailAuthSection').style.display = 'none';
+}
+
+function initRecaptcha() {
+  if (!isFirebaseReady()) return;
+  try {
+    if (recaptchaVerifier) { recaptchaVerifier.clear(); recaptchaVerifier = null; }
+    const container = document.getElementById('recaptcha-container');
+    if (!container) return;
+    container.innerHTML = '';
+    const { RecaptchaVerifier } = window._firebaseModules;
+    recaptchaVerifier = new RecaptchaVerifier(window._firebaseAuth, 'recaptcha-container', {
+      size: 'normal',
+      callback: () => { document.getElementById('sendOtpBtn').disabled = false; },
+      'expired-callback': () => { document.getElementById('sendOtpBtn').disabled = true; }
+    });
+    recaptchaVerifier.render();
+  } catch(e) { console.warn('reCAPTCHA init error:', e); }
+}
+
+async function sendOTP() {
+  const phone = document.getElementById('phoneInput').value.trim().replace(/\s/g,'');
+  if (phone.length !== 10 || !/^\d{10}$/.test(phone)) {
+    showToast('⚠️ Enter a valid 10-digit phone number', true); return;
+  }
+  const fullPhone = '+91' + phone;
+
+  if (!isFirebaseReady()) {
+    // Demo mode: simulate OTP flow
+    showToast('📱 Demo mode: OTP sent! (use any 6 digits)');
+    document.getElementById('otpSentTo').textContent = fullPhone;
+    document.getElementById('authStep1').style.display = 'none';
+    document.getElementById('authStep2').style.display = '';
+    confirmationResult = { _demoPhone: fullPhone };
+    return;
+  }
+
+  const btn = document.getElementById('sendOtpBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Sending…';
+
+  try {
+    const { signInWithPhoneNumber } = window._firebaseModules;
+    confirmationResult = await signInWithPhoneNumber(window._firebaseAuth, fullPhone, recaptchaVerifier);
+    document.getElementById('otpSentTo').textContent = fullPhone;
+    document.getElementById('authStep1').style.display = 'none';
+    document.getElementById('authStep2').style.display = '';
+    showToast('📨 OTP sent successfully!');
+  } catch(e) {
+    showToast('❌ ' + (e.message || 'Failed to send OTP'), true);
+    btn.disabled = false;
+    btn.innerHTML = '📨 Send OTP';
+    if (recaptchaVerifier) { recaptchaVerifier.clear(); recaptchaVerifier = null; }
+    setTimeout(() => initRecaptcha(), 500);
+  }
+}
+
+function resendOTP() {
+  document.getElementById('authStep2').style.display = 'none';
+  document.getElementById('authStep1').style.display = '';
+  const btn = document.getElementById('sendOtpBtn');
+  btn.disabled = false;
+  btn.innerHTML = '📨 Send OTP';
+  setTimeout(() => initRecaptcha(), 300);
+}
+
+function otpInputNav(input, idx) {
+  input.value = input.value.replace(/\D/,'');
+  if (input.value && idx < 5) {
+    const inputs = document.querySelectorAll('.otp-input');
+    inputs[idx + 1].focus();
+  }
+}
+
+async function verifyOTP() {
+  const inputs = document.querySelectorAll('.otp-input');
+  const code = [...inputs].map(i => i.value).join('');
+  if (code.length !== 6) { showToast('⚠️ Enter all 6 digits', true); return; }
+
+  const btn = document.getElementById('verifyOtpBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Verifying…';
+
+  if (confirmationResult && confirmationResult._demoPhone) {
+    // Demo mode
+    const phone = confirmationResult._demoPhone;
+    const name = document.getElementById('otpName').value.trim() || phone;
+    currentUser = { uid: 'demo_' + Date.now(), name, phone, email: '', isAdmin: (phone === ADMIN_PHONE) };
+    upsertUser(currentUser.uid, { name, phone, email: '', isAdmin: currentUser.isAdmin });
+    hideModal('authModal');
+    renderNav();
+    renderListings();
+    showToast(`✅ Welcome, ${name}!`);
+    btn.disabled = false;
+    btn.innerHTML = '✅ Verify & Login';
+    return;
+  }
+
+  try {
+    const result = await confirmationResult.confirm(code);
+    const user = result.user;
+    const name = document.getElementById('otpName').value.trim() || user.phoneNumber;
+    if (name && authMode === 'register') {
+      await window._firebaseModules.updateProfile(user, { displayName: name });
+    }
+    hideModal('authModal');
+    showToast(`✅ Welcome, ${user.displayName || user.phoneNumber}!`);
+  } catch(e) {
+    showToast('❌ Invalid OTP. Try again.', true);
+    btn.disabled = false;
+    btn.innerHTML = '✅ Verify & Login';
+  }
+}
+
+async function handleEmailAuth() {
+  const email = document.getElementById('emailInput').value.trim();
+  const password = document.getElementById('passwordInput').value;
+  const name = document.getElementById('emailName').value.trim();
+
+  if (!email || !password) { showToast('⚠️ Enter email and password', true); return; }
+
+  if (!isFirebaseReady()) {
+    // Demo mode
+    currentUser = { uid: 'demo_email_' + Date.now(), name: name || email, phone: '', email, isAdmin: (email === ADMIN_EMAIL) };
+    upsertUser(currentUser.uid, { name: currentUser.name, phone: '', email, isAdmin: currentUser.isAdmin });
+    hideModal('authModal');
+    renderNav();
+    renderListings();
+    showToast(`✅ Welcome, ${currentUser.name}!`);
+    return;
+  }
+
+  const btn = document.getElementById('emailAuthBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Please wait…';
+
+  try {
+    const { createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile } = window._firebaseModules;
+    let result;
+    if (authMode === 'register') {
+      result = await createUserWithEmailAndPassword(window._firebaseAuth, email, password);
+      if (name) await updateProfile(result.user, { displayName: name });
+    } else {
+      result = await signInWithEmailAndPassword(window._firebaseAuth, email, password);
+    }
+    hideModal('authModal');
+    showToast(`✅ Welcome, ${result.user.displayName || email}!`);
+  } catch(e) {
+    const msgs = { 'auth/user-not-found':'User not found', 'auth/wrong-password':'Wrong password', 'auth/email-already-in-use':'Email already in use', 'auth/weak-password':'Password too weak (min 6 chars)' };
+    showToast('❌ ' + (msgs[e.code] || e.message), true);
+  }
+  btn.disabled = false;
+  btn.innerHTML = authMode === 'login' ? 'Login' : 'Create Account';
+}
+
+async function handleLogout() {
+  if (isFirebaseReady()) {
+    await window._firebaseModules.signOut(window._firebaseAuth);
+  } else {
+    currentUser = null;
+    renderNav();
+    renderListings();
+  }
+  showToast('👋 Logged out');
+  showMainView();
+}
+
+// ======= SELL =======
+function handleSellClick() {
+  if (!currentUser) {
+    showToast('🔒 Please login first to post an ad');
+    openAuthModal('login');
+    return;
+  }
+  // Pre-fill seller name
+  const nameField = document.getElementById('adSeller');
+  if (nameField && currentUser.name) nameField.value = currentUser.name;
+  const phoneField = document.getElementById('adPhone');
+  if (phoneField && currentUser.phone) phoneField.value = currentUser.phone;
+  showModal('sellModal');
+}
+
+// ======= DETAIL =======
+function openDetail(id) {
+  const l = listings.find(x => x.id === id);
+  if (!l) return;
+  const imgs = (l.imgs && l.imgs.length > 0) ? l.imgs : [DEMO_PLACEHOLDERS[l.category]||DEMO_PLACEHOLDERS.Other];
+  const thumbsHtml = imgs.length > 1
+    ? `<div class="detail-thumbs">${imgs.map((img,i)=>`<img class="detail-thumb ${i===0?'active':''}" src="${img}" onclick="switchImg(this,'${img}')">`).join('')}</div>`
+    : '';
+  const isOwn = currentUser && l.ownerUid === currentUser.uid;
+  const isAdmin = currentUser && currentUser.isAdmin;
+  const feeMultiplier = 1 + (charges.listingFeePercent / 100);
+
+  // Seller contact: only shown to logged-in users
+  let contactHtml = '';
+  if (currentUser) {
+    contactHtml = `<button class="contact-btn" onclick="showToast('📞 ${escHtml(l.phone || 'No number')}')">📞 Contact Seller · ${escHtml(l.phone || 'Not provided')}</button>`;
+  } else {
+    contactHtml = `<div class="login-gate">🔒 <strong onclick="openAuthModal('login')">Login</strong> to see seller's phone number & contact them</div>
+    <button class="submit-btn" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);" onclick="openAuthModal('login')">🔑 Login to Contact Seller</button>`;
+  }
+
+  document.getElementById('detailContent').innerHTML = `
+    <div class="modal-header">
+      <div class="modal-title">${CAT_ICON[l.category]||'📦'} ${escHtml(l.category)}</div>
+      <div style="display:flex;gap:.5rem;align-items:center;">
+        ${(isOwn || isAdmin) ? `<button class="close-btn" style="background:var(--accent2);border-color:var(--accent2);color:#fff;width:auto;padding:0 .75rem;" onclick="deleteAd(${l.id})">🗑 Delete</button>` : ''}
+        <button class="close-btn" onclick="hideModal('detailModal')">✕</button>
+      </div>
+    </div>
+    <div class="detail-imgs">
+      <img class="detail-main-img" id="mainImg" src="${imgs[0]}" alt="${escHtml(l.title)}">
+      ${thumbsHtml}
+    </div>
+    <div class="detail-price">₹${Math.round(l.price * feeMultiplier).toLocaleString('en-IN')}</div>
+    <div class="detail-title">${escHtml(l.title)}</div>
+    <div class="detail-meta">
+      <span class="detail-tag">📍 ${escHtml(l.location)}</span>
+      <span class="detail-tag">🏷️ ${l.condition}</span>
+      <span class="detail-tag">🕒 ${l.postedAt ? timeAgo(l.postedAt) : l.time}</span>
+      ${imgs.length > 1 ? `<span class="detail-tag">📷 ${imgs.length} photos</span>` : ''}
+    </div>
+    <div class="detail-desc">${escHtml(l.desc || 'No description provided.')}</div>
+    <div class="detail-seller">
+      <div class="seller-avatar">${(l.seller||'?')[0].toUpperCase()}</div>
+      <div>
+        <div class="seller-name">${escHtml(l.seller)}</div>
+        <div class="seller-sub">${isOwn ? '✅ Your listing' : 'Verified seller'}</div>
+      </div>
+    </div>
+    ${contactHtml}
+  `;
+  showModal('detailModal');
+}
+function switchImg(el, src) {
+  document.getElementById('mainImg').src = src;
+  document.querySelectorAll('.detail-thumb').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+}
+
+// ======= DELETE AD =======
+function deleteAd(id) {
+  if (!confirm('Delete this listing?')) return;
+  listings = listings.filter(l => l.id !== id);
+  deleteListingStorage(id);
+  saveListings(listings);
+  hideModal('detailModal');
+  renderListings();
+  showToast('🗑️ Ad deleted');
+}
+
+// ======= FAV =======
+function toggleFav(e, id) {
+  e.stopPropagation();
+  const l = listings.find(x => x.id === id);
+  l.favs = !l.favs;
+  saveListings(listings);
+  showToast(l.favs ? '❤️ Added to wishlist' : 'Removed from wishlist');
+  renderListings();
+}
+
+// ======= UPLOAD =======
+function compressImage(dataUrl, maxWidth, quality, cb) {
+  const img = new Image();
+  img.onload = () => {
+    const canvas = document.createElement('canvas');
+    let w = img.width, h = img.height;
+    if (w > maxWidth) { h = Math.round(h * maxWidth / w); w = maxWidth; }
+    canvas.width = w; canvas.height = h;
+    canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+    cb(canvas.toDataURL('image/jpeg', quality));
+  };
+  img.src = dataUrl;
+}
+function handleFiles(files) {
+  [...files].forEach(f => {
+    if (uploadedFiles.length >= 6) { showToast('Max 6 photos allowed'); return; }
+    if (!f.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      compressImage(e.target.result, 900, 0.75, compressed => {
+        uploadedFiles.push({ url: compressed, name: f.name });
+        renderPreviews();
+        showStorageInfo();
+      });
+    };
+    reader.readAsDataURL(f);
+  });
+}
+function handleDrag(e) { e.preventDefault(); document.getElementById('uploadZone').classList.add('drag'); }
+function handleDragLeave() { document.getElementById('uploadZone').classList.remove('drag'); }
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('uploadZone').classList.remove('drag');
+  handleFiles(e.dataTransfer.files);
+}
+function renderPreviews() {
+  document.getElementById('previewGrid').innerHTML = uploadedFiles.map((f,i) => `
+    <div class="preview-item"><img src="${f.url}" alt=""><button onclick="removeFile(${i})">✕</button></div>
+  `).join('');
+}
+function removeFile(i) { uploadedFiles.splice(i, 1); renderPreviews(); showStorageInfo(); }
+function showStorageInfo() {
+  let used = 0;
+  try { for (let k in localStorage) { if (localStorage.hasOwnProperty(k)) used += ((localStorage[k].length + k.length) * 2); } } catch(e){}
+  const pct = Math.min(100, Math.round(used / (5*1024*1024) * 100));
+  const el = document.getElementById('storageInfo');
+  if (el) el.textContent = `💾 Device storage used: ~${pct}%`;
+}
+
+// ======= SUBMIT AD =======
+function submitAd() {
+  if (!currentUser) { showToast('🔒 Login required to post ads', true); openAuthModal('login'); return; }
+  const title = document.getElementById('adTitle').value.trim();
+  const category = document.getElementById('adCategory').value;
+  const condition = document.getElementById('adCondition').value;
+  const price = parseInt(document.getElementById('adPrice').value);
+  const location = document.getElementById('adLocation').value.trim();
+  const desc = document.getElementById('adDesc').value.trim();
+  const seller = document.getElementById('adSeller').value.trim();
+  const phone = document.getElementById('adPhone').value.trim();
+  if (!title || !category || !condition || !price || !location || !seller) {
+    showToast('⚠️ Please fill all required fields', true); return;
+  }
+  const id = Date.now();
+  const imgs = uploadedFiles.length > 0 ? uploadedFiles.map(f => f.url) : [DEMO_PLACEHOLDERS[category]||DEMO_PLACEHOLDERS.Other];
+  const newListing = {
+    id, title, category, condition, price, location,
+    desc: desc || 'No description provided.',
+    seller, phone: phone || 'Not provided',
+    imgs, favs: false, time: 'Just now',
+    postedAt: Date.now(), userUploaded: true,
+    ownerUid: currentUser.uid,
+    listingFee: Math.round(price * (charges.listingFeePercent/100))
+  };
+  saveImages(id, imgs);
+  listings.unshift(newListing);
+  saveListings(listings);
+  hideModal('sellModal');
+  resetForm();
+  renderListings();
+  showToast(`🎉 Ad posted!`);
+}
+function resetForm() {
+  ['adTitle','adPrice','adLocation','adDesc','adSeller','adPhone'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('adCategory').value = '';
+  document.getElementById('adCondition').value = '';
+  uploadedFiles = [];
+  renderPreviews();
+}
+
+// ======= TOAST =======
+function showToast(msg, isError = false) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.remove('error');
+  if (isError) t.classList.add('error');
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// ======= ADMIN PANEL =======
+function renderAdminPanel() {
+  // Stats
+  const totalRevenue = listings.reduce((s, l) => s + (l.listingFee || 0), 0);
+  document.getElementById('adminStats').innerHTML = `
+    <div class="admin-stat"><div class="admin-stat-label">Total Listings</div><div class="admin-stat-value">${listings.length}</div></div>
+    <div class="admin-stat"><div class="admin-stat-label">Registered Users</div><div class="admin-stat-value">${users.length}</div></div>
+    <div class="admin-stat"><div class="admin-stat-label">Revenue Collected</div><div class="admin-stat-value" style="color:var(--green);">₹${totalRevenue.toLocaleString('en-IN')}</div></div>
+    <div class="admin-stat"><div class="admin-stat-label">Listing Fee</div><div class="admin-stat-value">${charges.listingFeePercent}%</div></div>
+  `;
+
+  // Listings tab
+  const feeMultiplier = 1 + (charges.listingFeePercent / 100);
+  document.getElementById('adminListings').innerHTML = listings.length ? listings.map(l => `
+    <div class="admin-card">
+      <div style="font-size:1.5rem;">${CAT_ICON[l.category]||'📦'}</div>
+      <div class="admin-card-info">
+        <div class="admin-card-title">${escHtml(l.title)}</div>
+        <div class="admin-card-sub">📍 ${escHtml(l.location)} · ₹${Math.round(l.price * feeMultiplier).toLocaleString('en-IN')} · ${l.condition} · by ${escHtml(l.seller)} · ${l.postedAt ? timeAgo(l.postedAt) : l.time}</div>
+      </div>
+      <div class="admin-card-actions">
+        <button class="small-btn small-btn-danger" onclick="adminDeleteListing(${l.id})">🗑 Delete</button>
+      </div>
+    </div>
+  `).join('') : '<p style="color:var(--muted);padding:1rem;">No listings found.</p>';
+
+  // Users tab
+  document.getElementById('adminUsers').innerHTML = users.length ? users.map(u => `
+    <div class="admin-card">
+      <div class="seller-avatar" style="width:40px;height:40px;font-size:.9rem;">${(u.name||'U')[0].toUpperCase()}</div>
+      <div class="admin-card-info">
+        <div class="admin-card-title">${escHtml(u.name||'Unknown')} ${u.isAdmin ? '<span class="admin-badge" style="font-size:.65rem;">ADMIN</span>' : ''}</div>
+        <div class="admin-card-sub">${escHtml(u.phone||'')} ${u.email ? '· '+escHtml(u.email) : ''} · Joined ${timeAgo(u.createdAt||Date.now())}</div>
+      </div>
+      <div class="admin-card-actions">
+        ${!u.isAdmin ? `<button class="small-btn small-btn-danger" onclick="adminDeleteUser('${u.uid}')">🗑 Delete</button>` : '<span style="color:var(--muted);font-size:.8rem;">Protected</span>'}
+      </div>
+    </div>
+  `).join('') : '<p style="color:var(--muted);padding:1rem;">No registered users.</p>';
+
+  // Charges tab
+  document.getElementById('adminCharges').innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1.5rem;">
+      <h3 style="font-family:'Syne',sans-serif;margin-bottom:1.25rem;">💰 Fee & Charge Settings</h3>
+      <div class="admin-fee-row">
+        <div class="admin-fee-label">Listing Fee (%)</div>
+        <input class="admin-fee-input" type="number" id="feePct" value="${charges.listingFeePercent}" min="0" max="50" step="0.5">
+        <span style="color:var(--muted);font-size:.85rem;">% of listing price added to displayed price</span>
+      </div>
+      <div class="admin-fee-row">
+        <div class="admin-fee-label">Featured Boost (₹)</div>
+        <input class="admin-fee-input" type="number" id="feeBoost" value="${charges.featuredBoost}" min="0">
+        <span style="color:var(--muted);font-size:.85rem;">One-time boost per ad</span>
+      </div>
+      <div class="admin-fee-row">
+        <div class="admin-fee-label">Premium Plan (₹/mo)</div>
+        <input class="admin-fee-input" type="number" id="feePremium" value="${charges.premiumPlan}" min="0">
+        <span style="color:var(--muted);font-size:.85rem;">Monthly seller subscription</span>
+      </div>
+      <button class="submit-btn" style="max-width:200px;margin-top:.75rem;" onclick="saveAdminCharges()">💾 Save Charges</button>
+    </div>
+  `;
+
+  // Seller contacts tab
+  document.getElementById('adminContacts').innerHTML = `
+    <div style="margin-bottom:.75rem;color:var(--muted);font-size:.85rem;">All seller contact details from posted listings</div>
+    ${listings.map(l => `
+    <div class="admin-card">
+      <div style="font-size:1.5rem;">${CAT_ICON[l.category]||'📦'}</div>
+      <div class="admin-card-info">
+        <div class="admin-card-title">${escHtml(l.seller)} — ${escHtml(l.title)}</div>
+        <div class="admin-card-sub">📞 ${escHtml(l.phone||'Not provided')} · 📍 ${escHtml(l.location)}</div>
+      </div>
+      <div class="admin-card-actions">
+        <button class="small-btn small-btn-primary" onclick="showToast('📞 ${escHtml(l.phone||'N/A')}')">Call</button>
+        <button class="small-btn small-btn-danger" onclick="adminUpdateContact(${l.id})">✏️ Edit</button>
+      </div>
+    </div>`).join('') || '<p style="color:var(--muted);padding:1rem;">No listings found.</p>'}
+  `;
+}
+
+function switchAdminTab(tab, el) {
+  document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
+  if (el) el.classList.add('active');
+  document.querySelectorAll('.admin-section').forEach(s => s.classList.remove('active'));
+  document.getElementById('admin' + tab.charAt(0).toUpperCase() + tab.slice(1)).classList.add('active');
+}
+
+function adminDeleteListing(id) {
+  if (!confirm('Delete this listing?')) return;
+  listings = listings.filter(l => l.id !== id);
+  deleteListingStorage(id);
+  saveListings(listings);
+  renderAdminPanel();
+  showToast('🗑️ Listing deleted');
+}
+function adminDeleteUser(uid) {
+  if (!confirm('Delete this user and all their listings?')) return;
+  deleteUserById(uid);
+  renderAdminPanel();
+  showToast('🗑️ User deleted');
+}
+function saveAdminCharges() {
+  charges.listingFeePercent = parseFloat(document.getElementById('feePct').value) || 5;
+  charges.featuredBoost = parseInt(document.getElementById('feeBoost').value) || 99;
+  charges.premiumPlan = parseInt(document.getElementById('feePremium').value) || 299;
+  saveCharges();
+  showToast('✅ Charges updated!');
+  renderAdminPanel();
+  renderListings();
+}
+function adminUpdateContact(id) {
+  const l = listings.find(x => x.id === id);
+  if (!l) return;
+  const newPhone = prompt('Update phone for ' + l.seller + ':', l.phone || '');
+  if (newPhone === null) return;
+  l.phone = newPhone.trim();
+  saveListings(listings);
+  renderAdminPanel();
+  showToast('✅ Contact updated');
+}
+
+// ======= INIT =======
+renderNav();
+renderListings();
+showStorageInfo();
+</script>
+</body>
+</html>
