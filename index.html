@@ -892,5 +892,62 @@ function showToast(msg) {
 renderListings();
 showStorageInfo();
 </script>
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js"></script>
+<script>
+const firebaseConfig = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT.firebaseapp.com",
+  projectId: "YOUR_PROJECT_ID",
+  appId: "YOUR_APP_ID"
+};
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+
+let confirmationResult;
+
+function sendOTP() {
+  const phoneInput = document.querySelector('#loginModal input[type="text"]').value;
+
+  if (!phoneInput.startsWith('+')) {
+    showToast('⚠️ Enter phone with country code (+91...)');
+    return;
+  }
+
+  window.recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', {
+    size: 'invisible'
+  });
+
+  auth.signInWithPhoneNumber(phoneInput, window.recaptchaVerifier)
+    .then((result) => {
+      confirmationResult = result;
+      showToast('📩 OTP Sent');
+
+      const otp = prompt("Enter OTP");
+
+      if (otp) verifyOTP(otp);
+    })
+    .catch((error) => {
+      console.error(error);
+      showToast('❌ OTP failed');
+    });
+}
+
+function verifyOTP(otp) {
+  confirmationResult.confirm(otp)
+    .then((result) => {
+      showToast('✅ Logged in successfully');
+      hideModal('loginModal');
+      console.log("User:", result.user);
+    })
+    .catch(() => {
+      showToast('❌ Invalid OTP');
+    });
+}
+</script>
+<div id="recaptcha-container"></div>
+<button class="submit-btn" onclick="showToast('Logged in!'); hideModal('loginModal')">Login</button>
 </body>
 </html>
